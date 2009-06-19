@@ -1,0 +1,14 @@
+
+Módulos Externos
+================
+
+Os módulos aqui apresentados podem ser construídos externamente,
+desde que se possua os arquivos necessários para construção de módulos para o
+kernel utilizado no sistema.
+
+Na distribuição Fedora, o pacote que contém os arquivos necessários chama-se
+'kernel-devel'. O Makefile de exemplo utiliza automaticamente o código-fonte
+contido no pacote kernel-devel correspondente ao kernel que o sistema está
+rodando.
+
+
