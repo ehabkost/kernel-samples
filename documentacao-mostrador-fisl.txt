@@ -1,0 +1,74 @@
+(exemplo de especificação de hardware fictício)
+
+
+Documentação do dispositivo "mostrador de texto"
+================================================
+
+
+Portas
+======
+
+O dispositivo "mostrador de texto", denominado DM, ou Dispositivo Mostrador,
+oferece a seguinte interface:
+
+
+Porta de I/O  | Função
+--------------+-----------
+120           | Comandos
+124           | Dados
+
+
+Leituras e escritas nas portas de I/O devem ser realizadas com operações de 4
+bytes.
+
+
+Verificando a presença do DM
+============================
+
+A porta de comandos (120) pode ser utilizada para verificar a presença do
+Dispositivo Mostrador. Ao ser lida, a porta sempre retornará o valor DEADh.
+
+
+Comandos
+========
+
+Comandos que podem ser enviados à porta de Comandos:
+
+Valor | Função
+------+---------------------------
+01h   | Inicializar dispositivo
+02h   | Desligar dispositivo
+FFh   | Mostrar mensagem
+
+
+Comando: inicialização
+----------------------
+
+O comando 01h inicializa o DM. Ao ser inicializado, o DM irá apresentar a
+mensagem "------[ligado]------".
+
+
+
+Comando: desligar
+-----------------
+
+O comando 02h irá desligar o DM. Ao ser desligado o DM irá apresentar a
+mensagem "------[desligado]------".
+
+
+
+Comando: mostrar texto
+----------------------
+
+O comando FFh mostra o texto que foi previamente enviado para o dispositivo. O
+texto deve ser enviado através de escritas à porta de dados (124), cada
+escrita correspondendo a um caracter do texto. Para cada valor enviado à port
+de dados, apenas os 8 bits inferiores são considerados, os bits restantes são
+ignorados.
+
+O comando FFh irá renderizar no Dispositivo Mostrador todos os caracteres
+enviados à porta de dados (124) desde o último comando "mostrar texto" (FFh),
+ou desde a inicialização do dispositivo.
+
+O comando "mostrar texto" tem efeito apenas após o dispositivo ser
+inicializado pelo comando 01h.
