@@ -3,25 +3,32 @@
 #include <linux/uaccess.h>
 #include <linux/miscdevice.h>
 
+#include <asm/io.h>
+
 MODULE_AUTHOR("Eduardo Habkost");
-MODULE_LICENSE("MIT");
+MODULE_LICENSE("GPL");
 
+#define PORT_ADDRESS 120
+#define PORT_DATA_ADDRESS 124
+#define ID_FISL_DEV 0xdead
 
-#ifdef USE_CDEV
-static int major;
-static struct class *mostrador_class;
-#endif
+#define FISL_INICIALIZAR 1
+#define FISL_DESLIGA 2
+#define FISL_BUFFER_PRONTO 0xff
+
 
 static ssize_t mostrador_write(struct file *f, const char __user *buf, size_t len, loff_t *loff)
 {
 	char c, i;
-	printk("texto: [");
 	for (i = 0 ; i < len; i++) {
 		if (get_user(c, buf + i))
 			return -EFAULT;
-		printk("%c", c);
+
+		if (c == '\n')
+			outl(FISL_BUFFER_PRONTO, PORT_ADDRESS);
+		else
+			outl(c, PORT_DATA_ADDRESS);
 	}
-	printk("]\n");
 	return len;
 }
 
@@ -30,45 +37,39 @@ static const struct file_operations mostrador_fops = {
 	.write = mostrador_write,
 };
 
-#ifndef USE_CDEV
 static struct miscdevice mostrador_dev = {
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "mostrador",
 	.fops = &mostrador_fops,
 };
-#endif
 
 static int __init cdev_init(void)
 {
-#ifdef USE_CDEV
-	mostrador_class = class_create(THIS_MODULE, "mostrador");
-	if (IS_ERR(mostrador_class))
-		return PTR_ERR(mostrador_class);
+	u16 data;
+	int r;
 
-	major = register_chrdev(0, "mostrador", &mostrador_fops);
-	if (major < 0) {
-		printk("Error registrando chardev");
-		return major;
+	printk("Procurando dispositivo na porta %d\n", PORT_ADDRESS);
+	data = inl(PORT_ADDRESS);
+	if (data != ID_FISL_DEV) {
+		printk("Dispositivo FISL nao encontrado\n");
+		return -ENODEV;
 	}
 
-	device_create(...);
-#else
-	int r;
+	outl(FISL_INICIALIZAR, PORT_ADDRESS);
+	printk("Dispositivo inicializado\n");
+
 	r = misc_register(&mostrador_dev);
 	if (r < 0)
 		return r;
-#endif
 
 	return 0;
 }
 
 static void __exit cdev_exit(void)
 {
-#ifdef USE_CDEV
-	unregister_chrdev(major, DEVNAME);
-#else
 	misc_deregister(&mostrador_dev);
-#endif
+	outl(FISL_DESLIGA, PORT_ADDRESS);
+	printk("Dispositivo FISL desligado\n");
 }
 
 module_init(cdev_init);
