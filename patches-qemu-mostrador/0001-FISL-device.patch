@@ -1,0 +1,137 @@
+From 4109040a0e8b9b66ad1d4657604accdf248809f1 Mon Sep 17 00:00:00 2001
+From: Gasparzinho <ehabkost@raisama.net>
+Date: Thu, 25 Jun 2009 18:20:17 -0300
+Subject: [PATCH] FISL device
+
+Signed-off-by: Eduardo Habkost <ehabkost@raisama.net>
+---
+ Makefile.target            |    2 +-
+ hw/pc.c                    |    2 +
+ hw/qemu-dispositivo-fisl.c |   75 ++++++++++++++++++++++++++++++++++++++++++++
+ qemu-common.h              |    2 +
+ 4 files changed, 80 insertions(+), 1 deletions(-)
+ create mode 100644 hw/qemu-dispositivo-fisl.c
+
+diff --git a/Makefile.target b/Makefile.target
+index be16dbb..92f3109 100644
+--- a/Makefile.target
++++ b/Makefile.target
+@@ -634,7 +634,7 @@ OBJS+= ide.o pckbd.o vga.o $(SOUND_HW) dma.o
+ OBJS+= fdc.o mc146818rtc.o serial.o i8259.o i8254.o pcspk.o pc.o
+ OBJS+= cirrus_vga.o apic.o ioapic.o parallel.o acpi.o piix_pci.o
+ OBJS+= usb-uhci.o vmmouse.o vmport.o vmware_vga.o hpet.o
+-OBJS += device-hotplug.o pci-hotplug.o smbios.o
++OBJS += device-hotplug.o pci-hotplug.o smbios.o qemu-dispositivo-fisl.o
+ OBJS+= extboot.o
+ ifeq ($(USE_KVM_PIT), 1)
+ OBJS+= i8254-kvm.o
+diff --git a/hw/pc.c b/hw/pc.c
+index 05d05e0..7e45c0f 100644
+--- a/hw/pc.c
++++ b/hw/pc.c
+@@ -1063,6 +1063,8 @@ static void pc_init1(ram_addr_t ram_size,
+     register_ioport_read(0x92, 1, 1, ioport92_read, NULL);
+     register_ioport_write(0x92, 1, 1, ioport92_write, NULL);
+ 
++    qemu_fisl_init();
++
+     if (pci_enabled) {
+         ioapic = ioapic_init();
+     }
+diff --git a/hw/qemu-dispositivo-fisl.c b/hw/qemu-dispositivo-fisl.c
+new file mode 100644
+index 0000000..66c2115
+--- /dev/null
++++ b/hw/qemu-dispositivo-fisl.c
+@@ -0,0 +1,75 @@
++#include "hw.h"
++#include "pc.h"
++#include "isa.h"
++
++#define FISL_INICIALIZADO  0x1
++#define FISL_DESLIGA	   0x2
++#define FISL_BUFFER_PRONTO 0xff
++
++struct FISLState {
++	int state;
++	char buffer[512];
++	int idx;
++};
++
++static void fisl_data_write(void *opaque, uint32_t addr, uint32_t val)
++{
++	struct FISLState *fisl = opaque;
++
++	if (fisl->state != FISL_INICIALIZADO)
++		return;
++
++	fisl->buffer[fisl->idx++] = val;
++	if (fisl->idx >= 511)
++		fisl->idx = 0;
++}
++
++static void fisl_write(void *opaque, uint32_t addr, uint32_t val)
++{
++	struct FISLState *fisl = opaque;
++
++	/* dispositivo ainda nao inicializado */
++	if (fisl->state != FISL_INICIALIZADO) {
++		/* comando de inicializacao */
++		if (val == FISL_INICIALIZADO)
++			fisl->state = FISL_INICIALIZADO;
++		return;
++	}
++
++	/* comando que "desliga" o dispositivo */
++	if (val == FISL_DESLIGA) {
++		fisl->state = 0;
++		fisl->idx = 0;
++		memset(fisl->buffer, 0, 512);
++		fprintf(stderr, "fisl desligado\n");
++		return;
++	}
++
++	if (val == FISL_BUFFER_PRONTO)
++		fprintf(stderr, "%s: buffer = %s\n", __func__, fisl->buffer);
++}
++
++static uint32_t fisl_read(void *opaque, uint32_t addr)
++{
++	struct FISLState *fisl = opaque;
++
++	if (fisl->state != FISL_INICIALIZADO)
++		return 0xdead;
++
++	return 0;
++}
++
++void qemu_fisl_init(void)
++{
++	struct FISLState *fisl = qemu_mallocz(sizeof(struct FISLState));
++
++	fisl->state = 0;
++	fisl->idx = 0;
++	memset(fisl->buffer, 0, 512);
++
++	register_ioport_write(120, 4, 4, fisl_write, fisl);
++	register_ioport_read(120, 4, 4, fisl_read, fisl);
++
++	register_ioport_write(124, 4, 4, fisl_data_write, fisl);
++
++}
+diff --git a/qemu-common.h b/qemu-common.h
+index 2dcb224..599dfb7 100644
+--- a/qemu-common.h
++++ b/qemu-common.h
+@@ -228,6 +228,8 @@ void qemu_iovec_reset(QEMUIOVector *qiov);
+ void qemu_iovec_to_buffer(QEMUIOVector *qiov, void *buf);
+ void qemu_iovec_from_buffer(QEMUIOVector *qiov, const void *buf, size_t count);
+ 
++void qemu_fisl_init(void);
++
+ struct Monitor;
+ typedef struct Monitor Monitor;
+ 
+-- 
+1.5.5.6
+
